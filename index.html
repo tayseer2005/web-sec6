@@ -17,6 +17,8 @@
     footer{margin-top:18px;font-size:13px;color:#666}
     .flex{display:flex;gap:8px;align-items:center}
     .muted{color:#666;font-size:13px}
+    #login-box{background:#fff;padding:10px;border-radius:8px;margin-bottom:12px;box-shadow:0 6px 18px rgba(20,30,60,0.04)}
+    pre{background:#0b1220;color:#e6eef8;padding:12px;border-radius:6px;overflow:auto;max-height:260px}
   </style>
 </head>
 <body>
@@ -30,6 +32,7 @@
   </header>
 
   <main>
+    <!-- Login UI will be injected here -->
     <!-- Home view -->
     <section id="view-home">
       <p class="note">This demo intentionally <strong>trusts client-supplied price</strong> when adding items to the cart. Use it only locally for learning.</p>
@@ -68,6 +71,8 @@
           <button onclick="checkout()">Checkout</button>
           <button onclick="showView('home')" style="background:#e5e7eb;color:#111">Continue shopping</button>
         </div>
+        <h3 style="margin-top:12px">Last server response (if any)</h3>
+        <pre id="server-response">No requests sent yet.</pre>
       </div>
     </section>
 
@@ -122,19 +127,121 @@
       showView('product');
     }
 
-    // Vulnerable add to cart: trusts client-supplied price field
-    function addToCart(ev){
+    // ---------- Auth helpers UI (login) ----------
+    function showLoginUI() {
+      if (document.getElementById('login-box')) return;
+      const h = document.createElement('div');
+      h.id = 'login-box';
+      h.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>Login (dev)</strong>
+            <div style="display:flex;gap:8px;align-items:center;margin-top:6px">
+              <input id="login-user" placeholder="username" value="alice" style="padding:6px"/>
+              <input id="login-pass" placeholder="password" value="wonderland" style="padding:6px"/>
+              <button id="login-btn" onclick="doLogin()" style="padding:6px;background:#10b981;color:white;border:0;border-radius:6px">Login</button>
+              <button onclick="logoutLocal()" style="padding:6px">Logout</button>
+              <span id="login-info" style="margin-left:8px;color:#444;font-size:13px"></span>
+            </div>
+          </div>
+          <div style="text-align:right;color:#666;font-size:13px">
+            <div>Server: <code>http://127.0.0.1:5000</code></div>
+            <div class="muted">Use alice / wonderland</div>
+          </div>
+        </div>
+      `;
+      document.querySelector('main').prepend(h);
+      updateLoginInfo();
+    }
+
+    async function doLogin(){
+      const user = document.getElementById('login-user').value;
+      const pass = document.getElementById('login-pass').value;
+      try {
+        const res = await fetch('http://127.0.0.1:5000/login', {
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          body: JSON.stringify({ username: user, password: pass })
+        });
+        const j = await res.json().catch(()=>null);
+        if(res.ok && j && j.access_token){
+          localStorage.setItem('lab_token', j.access_token);
+          updateLoginInfo();
+          alert('Login successful — token saved');
+        } else {
+          alert('Login failed: ' + (j && (j.error || JSON.stringify(j)) || res.status));
+        }
+      } catch(e){
+        alert('Login error: ' + e);
+      }
+    }
+
+    function logoutLocal(){
+      localStorage.removeItem('lab_token');
+      updateLoginInfo();
+      alert('Logged out (token removed)');
+    }
+
+    function updateLoginInfo(){
+      const tok = localStorage.getItem('lab_token');
+      const el = document.getElementById('login-info');
+      if(el) el.textContent = tok ? 'Token present' : 'Not logged in';
+    }
+
+    // ensure login UI exists on load
+    showLoginUI();
+
+    // ---------- Modified addToCart that does real POST to the Python server ----------
+    async function addToCart(ev){
       ev.preventDefault();
       const qty = Number(document.getElementById('p-qty').value)||1;
       const clientPrice = Number(document.getElementById('p-price').value)||0;
+      const pid = currentProductId || 1;
+      const payload = { productId: pid, quantity: qty, price: clientPrice };
 
-      // In a real vulnerable server, the server would accept the clientPrice.
-      // Here we simulate that by saving the clientPrice as the line price.
-      const cart = loadCart();
-      cart.push({productId: currentProductId, name: PRODUCTS[currentProductId].name, qty: qty, price_sent_by_client: clientPrice});
-      saveCart(cart);
-      alert('Added to cart (server accepted client-supplied price).');
-      showView('cart');
+      // URL of your Python server endpoint
+      const url = 'http://127.0.0.1:5000/add_to_cart';
+
+      // get token from localStorage
+      const token = localStorage.getItem('lab_token');
+
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': 'Bearer ' + token } : {})
+          },
+          body: JSON.stringify(payload)
+        });
+
+        // try parse JSON
+        const j = await res.json().catch(async ()=> {
+          // not JSON: get text
+          const t = await res.text();
+          return { raw: t, status: res.status, ok: res.ok };
+        });
+
+        // show response in UI
+        const pre = document.getElementById('server-response');
+        pre.textContent = JSON.stringify(j, null, 2);
+
+        if(!res.ok){
+          alert('Server returned an error (check response pane).');
+          console.error('Server error:', j);
+        } else {
+          // still keep local cart simulation so UI doesn't break
+          const cart = loadCart();
+          cart.push({productId: pid, name: PRODUCTS[pid].name, qty: qty, price_sent_by_client: clientPrice});
+          saveCart(cart);
+          showView('cart');
+          alert('Server accepted request — response shown under Cart.');
+        }
+
+      } catch(err){
+        alert('Request failed: ' + err + '\n(If you used file:// to open this HTML, run: python -m http.server 8000 and open via http://127.0.0.1:8000/ )');
+        console.error(err);
+      }
     }
 
     // Render cart
@@ -169,7 +276,7 @@
       alert(msg);
     }
 
-    function resetLab(){ localStorage.removeItem('lab_cart'); updateCartCount(); renderProducts(); showView('home'); }
+    function resetLab(){ localStorage.removeItem('lab_cart'); updateCartCount(); renderProducts(); showView('home'); document.getElementById('server-response').textContent = 'No requests sent yet.'; }
 
     // Init
     renderProducts(); updateCartCount(); showView('home');
