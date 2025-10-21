@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Insecure Shop - Web Lab (Client-trust demo)</title>
+  <style>
+    :root{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
+    body{max-width:900px;margin:28px auto;padding:18px;background:#f7f8fb;color:#111}
+    header{display:flex;justify-content:space-between;align-items:center}
+    .products{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+    .card{background:white;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(20,30,60,0.06)}
+    button{padding:8px 12px;border-radius:8px;border:0;background:#2563eb;color:white;cursor:pointer}
+    input[type=number]{width:120px;padding:6px;border-radius:6px;border:1px solid #ddd}
+    nav a{margin-left:10px;text-decoration:none;color:#2563eb}
+    .note{font-size:13px;color:#555;margin-top:8px}
+    footer{margin-top:18px;font-size:13px;color:#666}
+    .flex{display:flex;gap:8px;align-items:center}
+    .muted{color:#666;font-size:13px}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Insecure Shop — Web Lab</h1>
+    <nav>
+      <a href="#home" onclick="showView('home')">Home</a>
+      <a href="#cart" onclick="showView('cart')">Cart (<span id="cart-count">0</span>)</a>
+      <a href="#reset" onclick="resetLab()">Reset</a>
+    </nav>
+  </header>
+
+  <main>
+    <!-- Home view -->
+    <section id="view-home">
+      <p class="note">This demo intentionally <strong>trusts client-supplied price</strong> when adding items to the cart. Use it only locally for learning.</p>
+      <div class="products" id="products"></div>
+    </section>
+
+    <!-- Product view (modal-like) -->
+    <section id="view-product" style="display:none">
+      <div class="card">
+        <h2 id="p-name"></h2>
+        <p>Server price: $<span id="p-server-price"></span></p>
+        <p class="muted">(The server-side truth in a real app would use the server price above — this demo instead lets the client send its own <code>price</code>.)</p>
+
+        <form id="add-form" onsubmit="addToCart(event)">
+          <div class="flex">
+            <label>Quantity: <input id="p-qty" type="number" value="1" min="1"></label>
+            <label>Price to send (client-controlled): $<input id="p-price" type="number" step="0.01" min="0"></label>
+          </div>
+          <div style="margin-top:10px">
+            <button type="submit">Add to cart</button>
+            <button type="button" onclick="showView('home')" style="background:#e5e7eb;color:#111">Back</button>
+          </div>
+        </form>
+
+        <p class="note">Try changing the "Price to send" field to a very small value and then add to cart — the application will accept it (vulnerable behavior).</p>
+      </div>
+    </section>
+
+    <!-- Cart view -->
+    <section id="view-cart" style="display:none">
+      <div class="card">
+        <h2>Your cart</h2>
+        <div id="cart-items"></div>
+        <p class="note" id="cart-note"></p>
+        <div style="margin-top:12px">
+          <button onclick="checkout()">Checkout</button>
+          <button onclick="showView('home')" style="background:#e5e7eb;color:#111">Continue shopping</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <strong>Warning:</strong> This page simulates a vulnerable server by trusting the client-provided price. Do this only in a safe local environment.
+  </footer>
+
+  <script>
+    // Server-side truth (simulated) - prices that server *should* use
+    const PRODUCTS = {
+      1: {id:1, name: 'Lightweight l33t leather jacket', price: 1337.00},
+      2: {id:2, name: 'Basic tee', price: 15.00}
+    };
+
+    // We'll store the "cart" in localStorage to persist between reloads for this demo.
+    function loadCart(){
+      try{ return JSON.parse(localStorage.getItem('lab_cart')||'[]'); }
+      catch(e){ return []; }
+    }
+    function saveCart(c){ localStorage.setItem('lab_cart', JSON.stringify(c)); updateCartCount(); }
+    function updateCartCount(){ document.getElementById('cart-count').textContent = loadCart().length; }
+
+    // Render product list
+    function renderProducts(){
+      const container = document.getElementById('products'); container.innerHTML='';
+      for(const id in PRODUCTS){
+        const p = PRODUCTS[id];
+        const div = document.createElement('div'); div.className='card';
+        div.innerHTML = `<h3>${p.name}</h3><p>Price: $${p.price.toFixed(2)}</p><p><button onclick="openProduct(${p.id})">View / Add</button></p>`;
+        container.appendChild(div);
+      }
+    }
+
+    // Views
+    function showView(name){
+      ['home','product','cart'].forEach(v => document.getElementById('view-'+v).style.display = (v===name ? '' : 'none'));
+      if(name==='home') renderProducts();
+      if(name==='cart') renderCart();
+    }
+
+    // Open product page
+    let currentProductId = null;
+    function openProduct(id){
+      currentProductId = id;
+      const p = PRODUCTS[id];
+      document.getElementById('p-name').textContent = p.name;
+      document.getElementById('p-server-price').textContent = p.price.toFixed(2);
+      document.getElementById('p-price').value = p.price.toFixed(2); // pre-fill with server price
+      document.getElementById('p-qty').value = 1;
+      showView('product');
+    }
+
+    // Vulnerable add to cart: trusts client-supplied price field
+    function addToCart(ev){
+      ev.preventDefault();
+      const qty = Number(document.getElementById('p-qty').value)||1;
+      const clientPrice = Number(document.getElementById('p-price').value)||0;
+
+      // In a real vulnerable server, the server would accept the clientPrice.
+      // Here we simulate that by saving the clientPrice as the line price.
+      const cart = loadCart();
+      cart.push({productId: currentProductId, name: PRODUCTS[currentProductId].name, qty: qty, price_sent_by_client: clientPrice});
+      saveCart(cart);
+      alert('Added to cart (server accepted client-supplied price).');
+      showView('cart');
+    }
+
+    // Render cart
+    function renderCart(){
+      const items = loadCart();
+      const container = document.getElementById('cart-items'); container.innerHTML='';
+      if(items.length===0){ container.innerHTML = '<p>Your cart is empty.</p>'; document.getElementById('cart-note').textContent=''; return; }
+      let html = '<table style="width:100%;border-collapse:collapse"><tr><th>Product</th><th>Qty</th><th>Price (client-sent)</th><th>Line total</th></tr>';
+      let total = 0;
+      for(const it of items){
+        const line = it.qty * Number(it.price_sent_by_client);
+        total += line;
+        html += `<tr><td>${it.name}</td><td>${it.qty}</td><td>$${Number(it.price_sent_by_client).toFixed(2)}</td><td>$${line.toFixed(2)}</td></tr>`;
+      }
+      html += `</table><p style="margin-top:8px"><strong>Cart total: $${total.toFixed(2)}</strong></p>`;
+      container.innerHTML = html;
+      document.getElementById('cart-note').textContent = 'Note: the server accepted the client-supplied prices above (vulnerable). In a secure app the server would calculate totals using its own trusted prices.';
+    }
+
+    // Checkout simulation: server should re-check prices — we'll show what a vulnerable server does vs secure check
+    function checkout(){
+      const items = loadCart();
+      if(items.length===0){ alert('Cart empty'); return; }
+
+      // Vulnerable server behavior: accept client prices
+      let vulnerableTotal = 0; for(const it of items) vulnerableTotal += it.qty * Number(it.price_sent_by_client);
+
+      // Secure server behavior: recalculate using server truth
+      let secureTotal = 0; for(const it of items) secureTotal += it.qty * PRODUCTS[it.productId].price;
+
+      const msg = `Vulnerable server total (accepted client prices): $${vulnerableTotal.toFixed(2)}\nSecure server total (recalculated from server prices): $${secureTotal.toFixed(2)}\n\nThis demo currently behaves like the vulnerable server.`;
+      alert(msg);
+    }
+
+    function resetLab(){ localStorage.removeItem('lab_cart'); updateCartCount(); renderProducts(); showView('home'); }
+
+    // Init
+    renderProducts(); updateCartCount(); showView('home');
+  </script>
+</body>
+</html>
