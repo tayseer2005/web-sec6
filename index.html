@@ -1,223 +1,219 @@
 <!doctype html>
-<html lang="ar">
+<html lang="en">
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>LAB — Excessive trust in client-side controls</title>
+<title>Lab Clone — Excessive trust in client-side controls</title>
 <style>
-  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;max-width:900px;margin:24px auto;padding:18px;background:#f6f8fb;color:#111}
-  header{display:flex;justify-content:space-between;align-items:center}
-  .card{background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(20,30,60,0.06);margin-bottom:12px}
-  .products{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
-  button{background:#2563eb;color:white;padding:8px 12px;border:0;border-radius:8px;cursor:pointer}
-  input[type=number]{padding:6px;border-radius:6px;border:1px solid #ddd;width:110px}
+  body{font-family: Arial, Helvetica, sans-serif; margin:0; padding:20px; background:#fff}
+  header{display:flex;justify-content:space-between;align-items:center;padding:10px 0}
+  .logo {font-weight:700;color:#e86a1a}
+  .topnav a{margin-left:12px;color:#0b69a3;text-decoration:none}
+  .hero{display:flex;justify-content:center;margin:18px 0}
+  .products{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+  .tile{border:1px solid #eee;border-radius:6px;padding:12px;background:#fafafa}
+  .tile img{width:100%;height:160px;object-fit:cover;border-radius:4px}
+  .tile h3{font-size:16px;margin:8px 0}
+  .tile .price{color:#0b69a3;font-weight:700}
+  .tile .button{display:inline-block;margin-top:8px;padding:8px 10px;background:#0b69a3;color:#fff;border-radius:6px;text-decoration:none;cursor:pointer}
+  .card{border:1px solid #eee;padding:12px;border-radius:6px;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,0.03)}
+  .modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1000;width:420px}
+  .overlay{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,0.25);z-index:900}
+  .flex{display:flex;gap:10px;align-items:center}
+  footer{margin-top:24px;color:#666;font-size:13px}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:8px;border-bottom:1px solid #eee;text-align:left}
+  pre{background:#f3f4f6;padding:10px;border-radius:6px;max-height:180px;overflow:auto}
   .muted{color:#666;font-size:13px}
-  pre{background:#0b1220;color:#e6eef8;padding:12px;border-radius:6px;overflow:auto;max-height:240px}
-  .flex{display:flex;gap:8px;align-items:center}
-  .small{font-size:13px;color:#444}
+  .btn-primary{background:#0b69a3;color:#fff;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
+  .btn-danger{background:#ef4444;color:#fff;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
 </style>
 </head>
 <body>
-  <header>
-    <h2>Business Logic Lab — Excessive client trust</h2>
-    <div class="muted">Lab / Apprentice</div>
-  </header>
+<header>
+  <div class="logo">WebSecurity Lab — Clone</div>
+  <nav class="topnav">
+    <a href="#">Home</a>
+    <a href="#">My account</a>
+    <a href="#" id="cartLink">Cart (<span id="cartCount">0</span>)</a>
+  </nav>
+</header>
 
-  <section class="card">
-    <h3>Balance (client-side)</h3>
-    <div class="flex" style="align-items:center">
-      <div class="small">Your local balance: <strong>$<span id="balance">0.00</span></strong></div>
-      <button id="topupBtn" style="margin-left:10px;background:#10b981">Top up $100</button>
-      <button id="zeroBtn" style="margin-left:6px;background:#ef4444">Zero balance</button>
+<section class="hero">
+  <h1>WE LIKE TO SHOP</h1>
+</section>
+
+<section>
+  <div style="display:flex;gap:12px;align-items:center;margin-bottom:12px">
+    <div class="card" style="padding:10px">
+      <div class="muted">Client-side balance</div>
+      <div style="font-size:18px;font-weight:700">$<span id="balance">0.00</span></div>
+      <div style="margin-top:8px" class="flex">
+        <button id="topUp" class="btn-primary">Top up $100</button>
+        <button id="zeroBal" class="btn-danger">Set $0</button>
+      </div>
+      <div class="muted" style="margin-top:8px">Balance is stored in <code>localStorage</code> and used only by client code (vulnerable).</div>
     </div>
-    <p class="muted" style="margin-top:8px">This balance is stored in localStorage and used only by client-side code to allow/deny checkout — that's the vulnerable control.</p>
-  </section>
+    <div style="flex:1"></div>
+  </div>
+</section>
 
-  <section class="card">
-    <h3>Products</h3>
-    <div class="products" id="products"></div>
-    <p class="muted" style="margin-top:8px">Add items — price is pre-filled from "server truth" but you can change it in the UI (client-controlled).</p>
-  </section>
+<section>
+  <h2>Products</h2>
+  <div class="products" id="products"></div>
+</section>
 
-  <section class="card">
-    <h3>Cart / Checkout</h3>
-    <div id="cartContainer"></div>
-    <div style="margin-top:12px">
-      <button id="goCheckout">Checkout (Pay)</button>
-      <button id="clearCart" style="margin-left:8px;background:#ef4444">Clear Cart</button>
+<!-- product modal container -->
+<div id="modalRoot"></div>
+
+<!-- cart panel (hidden initially) -->
+<section id="cartPanel" style="display:none;margin-top:18px">
+  <div class="card">
+    <h3>Your Cart</h3>
+    <div id="cartArea"></div>
+    <div style="margin-top:12px" class="flex">
+      <button id="checkoutBtn" class="btn-primary">Checkout (Pay)</button>
+      <button id="clearBtn" class="btn-danger">Clear Cart</button>
+      <div style="margin-left:auto" class="muted">Client-side check only</div>
     </div>
-    <p class="muted" style="margin-top:8px">Server response (last):</p>
-    <pre id="serverResponse">No request yet.</pre>
-  </section>
+    <h4 style="margin-top:12px">Last server response</h4>
+    <pre id="serverResp">No requests yet.</pre>
+  </div>
+</section>
 
-  <section class="card">
-    <h3>How to test the vulnerability</h3>
-    <ol>
-      <li>Top up your balance to <strong>$100</strong> (press <em>Top up $100</em>).</li>
-      <li>Open a product, change "Price to send" to a very small value (e.g. $1) or leave high price (server price), then Add to cart.</li>
-      <li>Click <em>Checkout (Pay)</em>. The page will check only the client-side balance and then send the POST to the server with the client-sent price.</li>
-      <li>To simulate exploit using Burp: enable Intercept and when the POST request appears, edit the JSON payload's <code>price</code> to a small value and forward it — server will accept it and store that price.</li>
-    </ol>
-    <p class="muted">This demonstrates "excessive trust" — a secure server would ignore the client price and compute totals server-side.</p>
-  </section>
+<footer>
+  <p class="muted">This is a local vulnerable lab clone for testing business-logic vulnerability: excessive trust in client-side controls.</p>
+  <p class="muted">To test with Burp: set browser proxy to Burp, enable Intercept, then click Checkout to capture/edit the POST.</p>
+</footer>
 
 <script>
-/* ============ CONFIG ============ */
-/* ضع عنوان endpoint الذي شغّلته في Colab/ngrok هنا */
-const POST_URL = 'https://1d1923faa375.ngrok-free.app/add_to_cart';
-/* ================================= */
+/* ====== CONFIG: set your ngrok endpoint here ====== */
+const POST_URL = 'https://1d1923faa375.ngrok-free.app/add_to_cart'; // <- your ngrok URL
+/* ================================================== */
 
-/* Server-side truth (what server SHOULD use) */
+/* server-truth products */
 const PRODUCTS = {
-  1: { id:1, name: 'Luxury jacket (server price)', serverPrice: 1337.00 },
-  2: { id:2, name: 'Basic tee (server price)', serverPrice: 15.00 }
+  1:{ id:1, name:'Lightweight "l33t" Leather Jacket', price:1337.00, img:'' },
+  2:{ id:2, name:'BBQ Suitcase', price:22.26, img:'' },
+  3:{ id:3, name:'Adult Space Hopper', price:31.72, img:'' },
+  4:{ id:4, name:'Giant Grasshopper', price:48.82, img:'' }
 };
 
 /* localStorage keys */
-const CART_KEY = 'lab_cart';
 const BAL_KEY = 'shop_balance_v1';
+const CART_KEY = 'shop_cart_v1';
 
 /* helpers */
-function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY)||'[]'); }catch(e){return[];} }
-function saveCart(c){ localStorage.setItem(CART_KEY, JSON.stringify(c)); renderCart(); updateCartCount(); }
 function loadBalance(){ return Number(localStorage.getItem(BAL_KEY) || 0); }
-function saveBalance(v){ localStorage.setItem(BAL_KEY, Number(v).toFixed(2)); renderBalance(); }
-function updateCartCount(){ document.getElementById('cartCount')?.remove(); /* placeholder */ }
+function saveBalance(v){ localStorage.setItem(BAL_KEY, Number(v)); renderBalance(); }
+function renderBalance(){ document.getElementById('balance').textContent = loadBalance().toFixed(2); }
 
-/* Render products */
+function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY)||'[]'); }catch(e){return[]} }
+function saveCart(c){ localStorage.setItem(CART_KEY, JSON.stringify(c)); renderCartCount(); renderCartArea(); }
+
+function renderCartCount(){ document.getElementById('cartCount').textContent = loadCart().length; }
+
+/* render products grid */
 function renderProducts(){
-  const container = document.getElementById('products');
-  container.innerHTML = '';
+  const root = document.getElementById('products'); root.innerHTML = '';
   for(const id in PRODUCTS){
     const p = PRODUCTS[id];
     const div = document.createElement('div');
-    div.className = 'card';
+    div.className = 'tile';
     div.innerHTML = `
-      <h4>${p.name}</h4>
-      <p>Server price: <strong>$${p.serverPrice.toFixed(2)}</strong></p>
-      <p class="flex"><button onclick="openProduct(${p.id})">View / Add</button></p>
+      <img src="https://picsum.photos/seed/${p.id}/600/400" alt="">
+      <h3>${p.name}</h3>
+      <div class="price">$${p.price.toFixed(2)}</div>
+      <div style="margin-top:8px"><button class="button" onclick="openProduct(${p.id})">View details</button></div>
     `;
-    container.appendChild(div);
+    root.appendChild(div);
   }
 }
 
-/* Product modal (simple) */
-let currentPid = null;
+/* open product modal */
+let modal = null;
 function openProduct(id){
-  currentPid = id;
   const p = PRODUCTS[id];
-  const modal = document.createElement('div');
-  modal.className = 'card';
-  modal.innerHTML = `
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = '';
+  const overlay = document.createElement('div'); overlay.className='overlay';
+  const m = document.createElement('div'); m.className='modal card';
+  m.innerHTML = `
     <h3>${p.name}</h3>
-    <p>Server-truth price: $${p.serverPrice.toFixed(2)}</p>
+    <p>Server price: <strong>$${p.price.toFixed(2)}</strong></p>
     <form id="addForm">
       <div class="flex" style="margin-top:8px">
-        <label>Qty: <input id="qty" type="number" value="1" min="1"></label>
-        <label style="margin-left:8px">Price to send: $<input id="clientPrice" type="number" step="0.01" min="0" value="${p.serverPrice.toFixed(2)}"></label>
+        <label>Qty: <input id="fldQty" type="number" min="1" value="1" style="width:80px;padding:6px;border:1px solid #ddd;border-radius:4px"></label>
+        <label style="margin-left:8px">Price to send: $<input id="fldPrice" type="number" step="0.01" min="0" value="${p.price.toFixed(2)}" style="width:120px;padding:6px;border:1px solid #ddd;border-radius:4px"></label>
       </div>
-      <div style="margin-top:10px">
-        <button type="submit">Add (send client price)</button>
-        <button type="button" id="closeModal" style="margin-left:8px;background:#e5e7eb;color:#000">Cancel</button>
+      <div style="margin-top:10px" class="flex">
+        <button type="submit" class="btn-primary">Add to cart (send client price)</button>
+        <button type="button" id="closeModal" class="btn-danger" style="margin-left:8px">Cancel</button>
       </div>
     </form>
-    <p class="muted" style="margin-top:8px">Note: this demo trusts the client price; the value you enter will be sent to the server as-is.</p>
+    <p class="muted" style="margin-top:8px">This demo trusts the client-sent price; you can edit it here or via DevTools/Burp before submitting.</p>
   `;
-  const main = document.querySelector('main');
-  main.prepend(modal);
-  document.getElementById('closeModal').onclick = ()=> modal.remove();
-  document.getElementById('addForm').onsubmit = async (e)=>{
+  root.appendChild(overlay); root.appendChild(m);
+  document.getElementById('closeModal').onclick = ()=> { root.innerHTML=''; };
+  document.getElementById('addForm').onsubmit = (e)=>{
     e.preventDefault();
-    const qty = Number(document.getElementById('qty').value)||1;
-    const price = Number(document.getElementById('clientPrice').value)||0;
-    // push to local cart (client-side)
+    const qty = Number(document.getElementById('fldQty').value)||1;
+    const price = Number(document.getElementById('fldPrice').value)||0;
     const cart = loadCart();
-    cart.push({ productId: currentPid, name: p.name, qty: qty, price_sent_by_client: price });
+    cart.push({ productId:id, name:p.name, qty:qty, price:price });
     saveCart(cart);
-    modal.remove();
-    alert('Added to local cart (client-sent price).');
+    root.innerHTML = '';
+    alert('Added to cart (client-sent price).');
   };
 }
 
-/* Cart rendering */
-function renderCart(){
+/* render cart area */
+function renderCartArea(){
   const cart = loadCart();
-  const container = document.getElementById('cartContainer');
-  if(!cart.length){ container.innerHTML = '<p>Your cart is empty.</p>'; return; }
-  let html = '<table style="width:100%;border-collapse:collapse"><tr><th>Product</th><th>Qty</th><th>Price (sent)</th><th>Line</th></tr>';
+  const area = document.getElementById('cartArea');
+  if(!cart.length){ area.innerHTML = '<p>Your cart is empty.</p>'; return; }
+  let html = '<table><tr><th>Product</th><th>Qty</th><th>Price(sent)</th><th>Line</th></tr>';
   let total = 0;
-  for(const it of cart){
-    const line = it.qty * Number(it.price_sent_by_client);
+  cart.forEach(it=>{
+    const line = it.qty * Number(it.price);
     total += line;
-    html += `<tr><td>${it.name}</td><td>${it.qty}</td><td>$${Number(it.price_sent_by_client).toFixed(2)}</td><td>$${line.toFixed(2)}</td></tr>`;
-  }
+    html += `<tr><td>${it.name}</td><td>${it.qty}</td><td>$${Number(it.price).toFixed(2)}</td><td>$${line.toFixed(2)}</td></tr>`;
+  });
   html += `</table><p style="margin-top:8px"><strong>Cart total (client-calculated): $${total.toFixed(2)}</strong></p>`;
-  container.innerHTML = html;
+  area.innerHTML = html;
 }
 
-/* Balance UI */
-function renderBalance(){
-  const b = loadBalance();
-  document.getElementById('balance').textContent = Number(b).toFixed(2);
-}
-
-/* Topup/reset handlers */
-document.addEventListener('click', (e)=>{
-  if(e.target && e.target.id === 'topupBtn'){
-    saveBalance(100);
-    alert('Balance topped up to $100 (client-side).');
-  } else if(e.target && e.target.id === 'zeroBtn'){
-    saveBalance(0);
-    alert('Balance set to $0 (client-side).');
-  } else if(e.target && e.target.id === 'clearCart'){
-    localStorage.removeItem(CART_KEY);
-    renderCart();
-    alert('Local cart cleared.');
-  } else if(e.target && e.target.id === 'goCheckout'){
-    doCheckout();
-  }
-});
-
-/* Checkout (client-side check only) */
-async function doCheckout(){
+/* checkout: client-side check only */
+async function checkout(){
   const cart = loadCart();
-  if(!cart.length){ alert('Cart is empty'); return; }
-  // compute client-side total using client-sent prices
+  if(!cart.length){ alert('Cart empty'); return; }
+  // client-calculated total
   let clientTotal = 0;
-  for(const it of cart) clientTotal += it.qty * Number(it.price_sent_by_client);
+  cart.forEach(it=> clientTotal += it.qty * Number(it.price));
   const balance = loadBalance();
-
-  // *** VULNERABLE CHECK: only client-side
   if(balance < clientTotal){
-    alert(`Insufficient balance (client check). Balance: $${balance.toFixed(2)} — Cart total: $${clientTotal.toFixed(2)}`);
+    alert(`Insufficient balance (client-side). Balance: $${balance.toFixed(2)} — Cart total: $${clientTotal.toFixed(2)}`);
     return;
   }
-
   // deduct locally
-  const remaining = (balance - clientTotal);
-  saveBalance(remaining);
-
-  // prepare payload (send entire cart to server)
+  saveBalance(balance - clientTotal);
+  // prepare payload and send to server (interceptable)
   const payload = { items: cart, total: clientTotal };
-
   try {
-    // send POST to server (interceptable)
     const res = await fetch(POST_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify(payload)
     });
-
-    const json = await res.json().catch(()=>({raw: 'non-json response'}));
-    document.getElementById('serverResponse').textContent = JSON.stringify(json, null, 2);
-
+    const j = await res.json().catch(()=>({raw: 'non-json'}));
+    document.getElementById('serverResp').textContent = JSON.stringify(j,null,2);
     if(res.ok){
-      // clear local cart (simulate checkout complete)
+      // clear local cart
       localStorage.removeItem(CART_KEY);
-      renderCart();
-      alert('Checkout request sent — server response in panel.');
+      renderCartCount(); renderCartArea();
+      alert('Checkout request sent. See server response panel.');
     } else {
-      alert('Server returned error — see response panel.');
+      alert('Server error — see response panel.');
     }
   } catch(err){
     alert('Request failed: ' + err);
@@ -225,10 +221,15 @@ async function doCheckout(){
   }
 }
 
-/* Init */
-renderProducts();
-renderCart();
-renderBalance();
+/* UI wiring */
+document.getElementById('topUp').onclick = ()=> { saveBalance(100); alert('Balance set to $100 (client-side)'); };
+document.getElementById('zeroBal').onclick = ()=> { saveBalance(0); alert('Balance set to $0'); };
+document.getElementById('cartLink').onclick = (e)=> { e.preventDefault(); document.getElementById('cartPanel').style.display=''; renderCartArea(); };
+document.getElementById('clearBtn').onclick = ()=> { localStorage.removeItem(CART_KEY); renderCartCount(); renderCartArea(); alert('Local cart cleared.'); };
+document.getElementById('checkoutBtn').onclick = ()=> { checkout(); };
+
+/* init */
+renderProducts(); renderBalance(); renderCartCount();
 </script>
 </body>
 </html>
