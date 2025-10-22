@@ -1,177 +1,234 @@
 <!doctype html>
-<html lang="en">
+<html lang="ar">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Insecure Shop - Web Lab (Client-trust demo)</title>
-  <style>
-    :root{font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;}
-    body{max-width:900px;margin:28px auto;padding:18px;background:#f7f8fb;color:#111}
-    header{display:flex;justify-content:space-between;align-items:center}
-    .products{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
-    .card{background:white;border-radius:10px;padding:12px;box-shadow:0 6px 18px rgba(20,30,60,0.06)}
-    button{padding:8px 12px;border-radius:8px;border:0;background:#2563eb;color:white;cursor:pointer}
-    input[type=number]{width:120px;padding:6px;border-radius:6px;border:1px solid #ddd}
-    nav a{margin-left:10px;text-decoration:none;color:#2563eb}
-    .note{font-size:13px;color:#555;margin-top:8px}
-    footer{margin-top:18px;font-size:13px;color:#666}
-    .flex{display:flex;gap:8px;align-items:center}
-    .muted{color:#666;font-size:13px}
-    #login-box{background:#fff;padding:10px;border-radius:8px;margin-bottom:12px;box-shadow:0 6px 18px rgba(20,30,60,0.04)}
-    pre{background:#0b1220;color:#e6eef8;padding:12px;border-radius:6px;overflow:auto;max-height:260px}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>LAB — Excessive trust in client-side controls</title>
+<style>
+  body{font-family:Inter,system-ui,Segoe UI,Roboto,Arial;max-width:900px;margin:24px auto;padding:18px;background:#f6f8fb;color:#111}
+  header{display:flex;justify-content:space-between;align-items:center}
+  .card{background:#fff;padding:14px;border-radius:10px;box-shadow:0 6px 18px rgba(20,30,60,0.06);margin-bottom:12px}
+  .products{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px}
+  button{background:#2563eb;color:white;padding:8px 12px;border:0;border-radius:8px;cursor:pointer}
+  input[type=number]{padding:6px;border-radius:6px;border:1px solid #ddd;width:110px}
+  .muted{color:#666;font-size:13px}
+  pre{background:#0b1220;color:#e6eef8;padding:12px;border-radius:6px;overflow:auto;max-height:240px}
+  .flex{display:flex;gap:8px;align-items:center}
+  .small{font-size:13px;color:#444}
+</style>
 </head>
 <body>
   <header>
-    <h1>Insecure Shop — Web Lab</h1>
-    <nav>
-      <a href="#home" onclick="showView('home')">Home</a>
-      <a href="#cart" onclick="showView('cart')">Cart (<span id="cart-count">0</span>)</a>
-      <a href="#reset" onclick="resetLab()">Reset</a>
-    </nav>
+    <h2>Business Logic Lab — Excessive client trust</h2>
+    <div class="muted">Lab / Apprentice</div>
   </header>
 
-  <main>
-    <section id="view-home">
-      <p class="note">This demo intentionally <strong>trusts client-supplied price</strong>. Use it only locally for learning.</p>
-      <div class="products" id="products"></div>
-    </section>
+  <section class="card">
+    <h3>Balance (client-side)</h3>
+    <div class="flex" style="align-items:center">
+      <div class="small">Your local balance: <strong>$<span id="balance">0.00</span></strong></div>
+      <button id="topupBtn" style="margin-left:10px;background:#10b981">Top up $100</button>
+      <button id="zeroBtn" style="margin-left:6px;background:#ef4444">Zero balance</button>
+    </div>
+    <p class="muted" style="margin-top:8px">This balance is stored in localStorage and used only by client-side code to allow/deny checkout — that's the vulnerable control.</p>
+  </section>
 
-    <section id="view-product" style="display:none">
-      <div class="card">
-        <h2 id="p-name"></h2>
-        <p>Server price: $<span id="p-server-price"></span></p>
-        <form id="add-form" onsubmit="addToCart(event)">
-          <div class="flex">
-            <label>Quantity: <input id="p-qty" type="number" value="1" min="1"></label>
-            <label>Price to send: $<input id="p-price" type="number" step="0.01" min="0"></label>
-          </div>
-          <div style="margin-top:10px">
-            <button type="submit">Add to cart</button>
-            <button type="button" onclick="showView('home')" style="background:#e5e7eb;color:#111">Back</button>
-          </div>
-        </form>
+  <section class="card">
+    <h3>Products</h3>
+    <div class="products" id="products"></div>
+    <p class="muted" style="margin-top:8px">Add items — price is pre-filled from "server truth" but you can change it in the UI (client-controlled).</p>
+  </section>
+
+  <section class="card">
+    <h3>Cart / Checkout</h3>
+    <div id="cartContainer"></div>
+    <div style="margin-top:12px">
+      <button id="goCheckout">Checkout (Pay)</button>
+      <button id="clearCart" style="margin-left:8px;background:#ef4444">Clear Cart</button>
+    </div>
+    <p class="muted" style="margin-top:8px">Server response (last):</p>
+    <pre id="serverResponse">No request yet.</pre>
+  </section>
+
+  <section class="card">
+    <h3>How to test the vulnerability</h3>
+    <ol>
+      <li>Top up your balance to <strong>$100</strong> (press <em>Top up $100</em>).</li>
+      <li>Open a product, change "Price to send" to a very small value (e.g. $1) or leave high price (server price), then Add to cart.</li>
+      <li>Click <em>Checkout (Pay)</em>. The page will check only the client-side balance and then send the POST to the server with the client-sent price.</li>
+      <li>To simulate exploit using Burp: enable Intercept and when the POST request appears, edit the JSON payload's <code>price</code> to a small value and forward it — server will accept it and store that price.</li>
+    </ol>
+    <p class="muted">This demonstrates "excessive trust" — a secure server would ignore the client price and compute totals server-side.</p>
+  </section>
+
+<script>
+/* ============ CONFIG ============ */
+/* ضع عنوان endpoint الذي شغّلته في Colab/ngrok هنا */
+const POST_URL = 'https://1d1923faa375.ngrok-free.app/add_to_cart';
+/* ================================= */
+
+/* Server-side truth (what server SHOULD use) */
+const PRODUCTS = {
+  1: { id:1, name: 'Luxury jacket (server price)', serverPrice: 1337.00 },
+  2: { id:2, name: 'Basic tee (server price)', serverPrice: 15.00 }
+};
+
+/* localStorage keys */
+const CART_KEY = 'lab_cart';
+const BAL_KEY = 'shop_balance_v1';
+
+/* helpers */
+function loadCart(){ try{ return JSON.parse(localStorage.getItem(CART_KEY)||'[]'); }catch(e){return[];} }
+function saveCart(c){ localStorage.setItem(CART_KEY, JSON.stringify(c)); renderCart(); updateCartCount(); }
+function loadBalance(){ return Number(localStorage.getItem(BAL_KEY) || 0); }
+function saveBalance(v){ localStorage.setItem(BAL_KEY, Number(v).toFixed(2)); renderBalance(); }
+function updateCartCount(){ document.getElementById('cartCount')?.remove(); /* placeholder */ }
+
+/* Render products */
+function renderProducts(){
+  const container = document.getElementById('products');
+  container.innerHTML = '';
+  for(const id in PRODUCTS){
+    const p = PRODUCTS[id];
+    const div = document.createElement('div');
+    div.className = 'card';
+    div.innerHTML = `
+      <h4>${p.name}</h4>
+      <p>Server price: <strong>$${p.serverPrice.toFixed(2)}</strong></p>
+      <p class="flex"><button onclick="openProduct(${p.id})">View / Add</button></p>
+    `;
+    container.appendChild(div);
+  }
+}
+
+/* Product modal (simple) */
+let currentPid = null;
+function openProduct(id){
+  currentPid = id;
+  const p = PRODUCTS[id];
+  const modal = document.createElement('div');
+  modal.className = 'card';
+  modal.innerHTML = `
+    <h3>${p.name}</h3>
+    <p>Server-truth price: $${p.serverPrice.toFixed(2)}</p>
+    <form id="addForm">
+      <div class="flex" style="margin-top:8px">
+        <label>Qty: <input id="qty" type="number" value="1" min="1"></label>
+        <label style="margin-left:8px">Price to send: $<input id="clientPrice" type="number" step="0.01" min="0" value="${p.serverPrice.toFixed(2)}"></label>
       </div>
-    </section>
-
-    <section id="view-cart" style="display:none">
-      <div class="card">
-        <h2>Your cart</h2>
-        <div id="cart-items"></div>
-        <p class="note" id="cart-note"></p>
-        <div style="margin-top:12px">
-          <button onclick="checkout()">Checkout</button>
-          <button onclick="showView('home')" style="background:#e5e7eb;color:#111">Continue shopping</button>
-        </div>
-        <h3 style="margin-top:12px">Last server response</h3>
-        <pre id="server-response">No requests sent yet.</pre>
+      <div style="margin-top:10px">
+        <button type="submit">Add (send client price)</button>
+        <button type="button" id="closeModal" style="margin-left:8px;background:#e5e7eb;color:#000">Cancel</button>
       </div>
-    </section>
-  </main>
+    </form>
+    <p class="muted" style="margin-top:8px">Note: this demo trusts the client price; the value you enter will be sent to the server as-is.</p>
+  `;
+  const main = document.querySelector('main');
+  main.prepend(modal);
+  document.getElementById('closeModal').onclick = ()=> modal.remove();
+  document.getElementById('addForm').onsubmit = async (e)=>{
+    e.preventDefault();
+    const qty = Number(document.getElementById('qty').value)||1;
+    const price = Number(document.getElementById('clientPrice').value)||0;
+    // push to local cart (client-side)
+    const cart = loadCart();
+    cart.push({ productId: currentPid, name: p.name, qty: qty, price_sent_by_client: price });
+    saveCart(cart);
+    modal.remove();
+    alert('Added to local cart (client-sent price).');
+  };
+}
 
-  <footer>
-    <strong>Warning:</strong> This page simulates a vulnerable shop demo.
-  </footer>
+/* Cart rendering */
+function renderCart(){
+  const cart = loadCart();
+  const container = document.getElementById('cartContainer');
+  if(!cart.length){ container.innerHTML = '<p>Your cart is empty.</p>'; return; }
+  let html = '<table style="width:100%;border-collapse:collapse"><tr><th>Product</th><th>Qty</th><th>Price (sent)</th><th>Line</th></tr>';
+  let total = 0;
+  for(const it of cart){
+    const line = it.qty * Number(it.price_sent_by_client);
+    total += line;
+    html += `<tr><td>${it.name}</td><td>${it.qty}</td><td>$${Number(it.price_sent_by_client).toFixed(2)}</td><td>$${line.toFixed(2)}</td></tr>`;
+  }
+  html += `</table><p style="margin-top:8px"><strong>Cart total (client-calculated): $${total.toFixed(2)}</strong></p>`;
+  container.innerHTML = html;
+}
 
-  <script>
-    const PRODUCTS = {
-      1: {id:1, name: 'Lightweight l33t leather jacket', price: 1337.00},
-      2: {id:2, name: 'Basic tee', price: 15.00}
-    };
+/* Balance UI */
+function renderBalance(){
+  const b = loadBalance();
+  document.getElementById('balance').textContent = Number(b).toFixed(2);
+}
 
-    function loadCart(){ try{ return JSON.parse(localStorage.getItem('lab_cart')||'[]'); }catch(e){ return []; } }
-    function saveCart(c){ localStorage.setItem('lab_cart', JSON.stringify(c)); updateCartCount(); }
-    function updateCartCount(){ document.getElementById('cart-count').textContent = loadCart().length; }
+/* Topup/reset handlers */
+document.addEventListener('click', (e)=>{
+  if(e.target && e.target.id === 'topupBtn'){
+    saveBalance(100);
+    alert('Balance topped up to $100 (client-side).');
+  } else if(e.target && e.target.id === 'zeroBtn'){
+    saveBalance(0);
+    alert('Balance set to $0 (client-side).');
+  } else if(e.target && e.target.id === 'clearCart'){
+    localStorage.removeItem(CART_KEY);
+    renderCart();
+    alert('Local cart cleared.');
+  } else if(e.target && e.target.id === 'goCheckout'){
+    doCheckout();
+  }
+});
 
-    function renderProducts(){
-      const container = document.getElementById('products'); container.innerHTML='';
-      for(const id in PRODUCTS){
-        const p = PRODUCTS[id];
-        const div = document.createElement('div'); div.className='card';
-        div.innerHTML = `<h3>${p.name}</h3><p>Price: $${p.price.toFixed(2)}</p><p><button onclick="openProduct(${p.id})">View / Add</button></p>`;
-        container.appendChild(div);
-      }
+/* Checkout (client-side check only) */
+async function doCheckout(){
+  const cart = loadCart();
+  if(!cart.length){ alert('Cart is empty'); return; }
+  // compute client-side total using client-sent prices
+  let clientTotal = 0;
+  for(const it of cart) clientTotal += it.qty * Number(it.price_sent_by_client);
+  const balance = loadBalance();
+
+  // *** VULNERABLE CHECK: only client-side
+  if(balance < clientTotal){
+    alert(`Insufficient balance (client check). Balance: $${balance.toFixed(2)} — Cart total: $${clientTotal.toFixed(2)}`);
+    return;
+  }
+
+  // deduct locally
+  const remaining = (balance - clientTotal);
+  saveBalance(remaining);
+
+  // prepare payload (send entire cart to server)
+  const payload = { items: cart, total: clientTotal };
+
+  try {
+    // send POST to server (interceptable)
+    const res = await fetch(POST_URL, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+
+    const json = await res.json().catch(()=>({raw: 'non-json response'}));
+    document.getElementById('serverResponse').textContent = JSON.stringify(json, null, 2);
+
+    if(res.ok){
+      // clear local cart (simulate checkout complete)
+      localStorage.removeItem(CART_KEY);
+      renderCart();
+      alert('Checkout request sent — server response in panel.');
+    } else {
+      alert('Server returned error — see response panel.');
     }
+  } catch(err){
+    alert('Request failed: ' + err);
+    console.error(err);
+  }
+}
 
-    function showView(name){
-      ['home','product','cart'].forEach(v => document.getElementById('view-'+v).style.display = (v===name ? '' : 'none'));
-      if(name==='home') renderProducts();
-      if(name==='cart') renderCart();
-    }
-
-    let currentProductId = null;
-    function openProduct(id){
-      currentProductId = id;
-      const p = PRODUCTS[id];
-      document.getElementById('p-name').textContent = p.name;
-      document.getElementById('p-server-price').textContent = p.price.toFixed(2);
-      document.getElementById('p-price').value = p.price.toFixed(2);
-      document.getElementById('p-qty').value = 1;
-      showView('product');
-    }
-
-    // ✅ Modified addToCart — sends POST to your ngrok server
-    async function addToCart(ev){
-      ev.preventDefault();
-      const qty = Number(document.getElementById('p-qty').value)||1;
-      const clientPrice = Number(document.getElementById('p-price').value)||0;
-      const pid = currentProductId || 1;
-      const payload = { productId: pid, quantity: qty, price: clientPrice };
-
-      // 👇 Replace with your ngrok public URL (already inserted)
-      const url = 'https://1d1923faa375.ngrok-free.app/add_to_cart';
-
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-
-        const j = await res.json().catch(async ()=>({raw: await res.text()}));
-        document.getElementById('server-response').textContent = JSON.stringify(j, null, 2);
-
-        if(res.ok){
-          const cart = loadCart();
-          cart.push({productId: pid, name: PRODUCTS[pid].name, qty: qty, price_sent_by_client: clientPrice});
-          saveCart(cart);
-          showView('cart');
-          alert('✅ Request sent successfully!');
-        } else {
-          alert('❌ Server error (see response).');
-        }
-
-      } catch(err){
-        alert('Request failed: ' + err);
-        console.error(err);
-      }
-    }
-
-    function renderCart(){
-      const items = loadCart();
-      const container = document.getElementById('cart-items'); container.innerHTML='';
-      if(items.length===0){ container.innerHTML = '<p>Your cart is empty.</p>'; document.getElementById('cart-note').textContent=''; return; }
-      let html = '<table style="width:100%;border-collapse:collapse"><tr><th>Product</th><th>Qty</th><th>Price (client)</th><th>Total</th></tr>';
-      let total = 0;
-      for(const it of items){
-        const line = it.qty * Number(it.price_sent_by_client);
-        total += line;
-        html += `<tr><td>${it.name}</td><td>${it.qty}</td><td>$${Number(it.price_sent_by_client).toFixed(2)}</td><td>$${line.toFixed(2)}</td></tr>`;
-      }
-      html += `</table><p><strong>Cart total: $${total.toFixed(2)}</strong></p>`;
-      container.innerHTML = html;
-    }
-
-    function checkout(){
-      const items = loadCart();
-      if(items.length===0){ alert('Cart empty'); return; }
-      let total = 0; for(const it of items) total += it.qty * Number(it.price_sent_by_client);
-      alert(`Your total (vulnerable): $${total.toFixed(2)}\n\nServer accepted your client-supplied prices.`);
-    }
-
-    function resetLab(){ localStorage.removeItem('lab_cart'); updateCartCount(); renderProducts(); showView('home'); document.getElementById('server-response').textContent = 'No requests sent yet.'; }
-
-    renderProducts(); updateCartCount(); showView('home');
-  </script>
+/* Init */
+renderProducts();
+renderCart();
+renderBalance();
+</script>
 </body>
 </html>
